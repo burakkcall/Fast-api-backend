@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastAPI Token Testi</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e1e; color: #fff; margin: 40px; }
+        .container { background-color: #2d2d2d; padding: 20px; border-radius: 8px; max-width: 400px; margin-bottom: 20px; }
+        input { display: block; width: 100%; margin-bottom: 15px; padding: 10px; box-sizing: border-box; border-radius: 4px; border: 1px solid #444; background: #333; color: white; }
+        button { width: 100%; padding: 10px; background-color: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #005999; }
+        pre { background: #000; padding: 15px; border-radius: 8px; overflow-x: auto; color: #0f0; }
+    </style>
+</head>
+<body>
+
+    <h2>JWT API Test Arayüzü</h2>
+
+    <div class="container">
+        <h3>1. Giriş Yap (Token Al)</h3>
+        <!-- auth.py'deki login mantığına göre herhangi bir veri girebilirsin (veritabanı kapalı olduğu için şu an genelde her şeyi kabul eder veya auth.py nasıl yazıldıysa) -->
+        <input type="text" id="username" placeholder="Kullanıcı Adı">
+        <input type="password" id="password" placeholder="Şifre">
+        <button onclick="login()">Giriş Yap</button>
+    </div>
+
+    <div class="container">
+        <h3>2. Korumalı Alana İstek At</h3>
+        <p style="font-size: 12px; color: #aaa;">Yukarıdan alınan token'ı kullanarak yetki gerektiren bir adrese istek atar.</p>
+        <button onclick="getProtectedData()">Kimlik Doğrula ve Veri Çek</button>
+    </div>
+
+    <h3>Sistem Çıktısı:</h3>
+    <pre id="output">Sistem hazır. İşlem bekleniyor...</pre>
+
+    <script>
+        // API'nin çalıştığı adres (Uvicorn terminalinde yazan adres)
+        const API_URL = "http://127.0.0.1:8000";
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const output = document.getElementById('output');
+
+            output.innerText = "Giriş yapılıyor...";
+
+            // FastAPI OAuth2PasswordBearer, verilerin form formatında gelmesini bekler
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            try {
+                // oauth2.py'de tokenUrl="login" olduğu için /login adresine istek atıyoruz
+                const response = await fetch(`${API_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Gelen access_token bilgisini tarayıcının hafızasına kaydediyoruz
+                    localStorage.setItem('access_token', data.access_token);
+                    output.innerText = "✅ GİRİŞ BAŞARILI! Token tarayıcıya kaydedildi.\n\nAPI Yanıtı:\n" + JSON.stringify(data, null, 2);
+                } else {
+                    output.innerText = "❌ GİRİŞ BAŞARISIZ:\n\n" + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                output.innerText = "HATA: Sunucuya bağlanılamadı. API açık mı?\nDetay: " + error;
+            }
+        }
+
+        async function getProtectedData() {
+            // Tarayıcı hafızasına kaydettiğimiz token'ı alıyoruz
+            const token = localStorage.getItem('access_token');
+            const output = document.getElementById('output');
+
+            if (!token) {
+                output.innerText = "⚠️ Önce giriş yapıp token almalısın!";
+                return;
+            }
+
+            output.innerText = "Veri çekiliyor...";
+
+            try {
+                // Eğer /users/me veya farklı bir korumalı rotan varsa adresi buraya yazmalısın. 
+                // Şu an örnek olarak kök dizine (veya belirlediğin korumalı bir rotaya) istek atıyoruz.
+                const response = await fetch(`${API_URL}/`, { // Korumalı rotan neresiyse / yerini onunla değiştir
+                    method: 'GET',
+                    headers: {
+                        // Token'ı Authorization başlığına 'Bearer <token>' formatında ekliyoruz
+                        'Authorization': `Bearer ${token}` 
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    output.innerText = "✅ İSTEK BAŞARILI!\n\nSunucudan Gelen Veri:\n" + JSON.stringify(data, null, 2);
+                } else {
+                     output.innerText = "❌ YETKİ REDDEDİLDİ (Token geçersiz veya süresi dolmuş olabilir):\n\n" + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                output.innerText = "HATA: " + error;
+            }
+        }
+    </script>
+</body>
+</html>
